@@ -69,4 +69,4 @@ if bo == -1:
 	print('error while playing')
 
 while finish == 0:
-	sleep(0.2)
+	time.sleep(0.2)
