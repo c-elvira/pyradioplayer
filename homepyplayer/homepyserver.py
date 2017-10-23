@@ -90,84 +90,44 @@ class ServerHomePyShell(AHomePyShell):
     def setServer(self, HomePyServer):
 
         self.homepyServer = HomePyServer
+        self.sock = None
 
 
-class HomePyServer(object):
-    """
-        docstring for HomePyServer
-    """
+class HomePyNetwork(object):
 
-    def __init__(self):
-        super(HomePyServer, self).__init__()
+    def __init__(self, callbackEvent):
+        super(HomePyNetwork, self).__init__()
 
-        self.instance = vlc.Instance()
-        self.player = self.instance.media_player_new()
-        self.quit = AtomicBool(False)
+        self.sock = None
+        self.atomicBoolQuit = AtomicBool(False)
+        self.callbackProcessEvent = callbackEvent
 
-        self.queueEvent = queue.Queue()
-        self.thread_server = None
+    def bindAddress(self):
 
-    def callbackRadioStop(self, event):
-        """
-            Fonction
-        """
-        self.queueEvent.put('restart radio')
+        # Create a TCP/IP socket
+        self.sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
 
-    def start(self):
-
-        print('HomePyServer has started\n')
-
-        self.whenStarted()
-
-        self.mainloop()
-
-    def mainloop(self):
-        """
-            An infinite loop than inspect a queue
-        """
-
-        self.thread_server = threading.Thread(target=self.serverloop)
-        self.thread_server.start()
-
-        shell = ServerHomePyShell()
-        shell.setServer(self)
-
-        while not self.quit.get():
-            try:
-                event = self.queueEvent.get(True, None)
-                shell.onecmd(event)
-
-            except NotImplementedError:
-                print('The command is not implemented yet')
-
-        # The program is about to quit, wait for the thread
-        self.killServer()
-        self.thread_server.join()
+        # Bind the socket to the port
+        server_address = (ADDRESS, PORT)
+        self.sock.bind(server_address)
 
     def serverloop(self):
         """
             Server
         """
 
-        # Create a TCP/IP socket
-        sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-
-        # Bind the socket to the port
-        server_address = (ADDRESS, PORT)
-        sock.bind(server_address)
-
         # Listen for incoming connections
-        sock.listen(1)
+        self.sock.listen(1)
 
-        while not self.quit.get():
+        while not self.atomicBoolQuit.get():
             # Wait for a connection
             print('waiting for a connection')
-            connection, client_address = sock.accept()
+            connection, client_address = self.sock.accept()
 
             try:
                 print('connection from ' + str(client_address))
 
-                while not self.quit.get():
+                while not self.atomicBoolQuit.get():
                     try:
                         connection.settimeout(5.0)
                         recevied_message = ''
@@ -188,7 +148,7 @@ class HomePyServer(object):
                         recevied_message = recevied_message.replace(END_TRAME, '')
 
                         print('received: ' + recevied_message)
-                        self.queueEvent.put(recevied_message)
+                        self.callbackProcessEvent(recevied_message)
 
                     except socket.timeout as e:
                         err = e.args[0]
@@ -216,8 +176,83 @@ class HomePyServer(object):
                 # Clean up the connection
                 connection.close()
 
-    def kill(self):
+    def closeNetwork(self):
+        self.atomicBoolQuit.set(True)
+
+
+class HomePyServer(object):
+    """
+        docstring for HomePyServer
+    """
+
+    def __init__(self):
+        super(HomePyServer, self).__init__()
+
+        self.moduleNetwork = None
+
+        self.instance = vlc.Instance()
+        self.player = self.instance.media_player_new()
+        self.quit = AtomicBool(False)
+
+        self.queueEvent = queue.Queue()
+        self.thread_server = None
+
+    def __exit__(self):
         print('Byyyy :)')
+
+    def callbackRadioStop(self, event):
+        """
+            Fonction
+        """
+        self.queueEvent.put('restart radio')
+
+    def callbackProcessEvent(self, event):
+        self.queueEvent.put(event)
+
+    def start(self):
+
+        print('HomePyServer has started\n')
+        print('Initialize')
+
+        try:
+            # Creating module
+            self.moduleNetwork = HomePyNetwork(self.callbackProcessEvent)
+            self.moduleNetwork.bindAddress()
+
+            # Threding stuff
+            self.thread_server = threading.Thread(target=self.moduleNetwork.serverloop)
+            self.thread_server.start()
+            print('\tListening to event')
+
+        except Exception as e:
+            raise e
+
+
+        self.whenStarted()
+
+        self.mainloop()
+
+    def mainloop(self):
+        """
+            An infinite loop than inspect a queue
+        """
+
+        shell = ServerHomePyShell()
+        shell.setServer(self)
+
+        while not self.quit.get():
+            try:
+                event = self.queueEvent.get(True, None)
+                shell.onecmd(event)
+
+            except NotImplementedError:
+                print('The command is not implemented yet')
+
+        # The program is about to quit, wait for the thread
+        self.moduleNetwork.closeNetwork()
+        self.thread_server.join()
+
+    def kill(self):
         self.quit.set(True)
 
     def changeVolume(self, newvolume):
@@ -231,19 +266,6 @@ class HomePyServer(object):
 
         elif not self.player.is_playing() and bool_action:
             self.player.play()
-
-    def killServer(self):
-
-        try:
-            sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-            server_address = ('localhost', 10000)
-            sock.connect(server_address)
-
-            message = 'kill'
-            sock.sendall(message.encode())
-
-        finally:
-            sock.close()
 
     def whenStarted(self):
 
