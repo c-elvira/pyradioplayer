@@ -1,10 +1,17 @@
 import socket
-# import sys
+import sys
 
 from homepyShell import AHomePyShell
 
+try:
 
-ADRESS = '192.168.1.44'  # 'localhost'
+    if sys.argv[1] == 'test':
+        ADDRESS = 'localhost'
+    else:
+        ADDRESS = '192.168.1.44'
+except Exception as e:
+    ADDRESS = '192.168.1.44'
+
 PORT = 10000
 RESPONSE_SERVEUR = 'OK'
 END_TRAME = 'FINTRAME'
@@ -35,7 +42,7 @@ class SocketManager(object):
         self.sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
 
         # Connect the socket to the port where the server is listening
-        server_address = (ADRESS, PORT)
+        server_address = (ADDRESS, PORT)
         print('\tconnecting to ' + str(server_address))
         self.sock.connect(server_address)
 
@@ -59,27 +66,32 @@ class ClientHomePyShell(AHomePyShell):
 
     connectionManager = None
 
-    # ----- basic turtle commands -----
+    # ----- shell commands -----
     def do_quit(self, arg):
         'Close the HomePyServer as specified by the command line argument. Examples \n >>quit client'
 
         if arg == 'client':
+            #return True
             raise QuitException
-        elif arg == 'serveur':
+        elif arg == 'server':
             self.send('quit')
         else:
-            print('Unknown argument for quit. Precise either \'client\' or \'serveur\'')
+            print('Unknown argument for quit. Precise either \'client\' or \'server\'')
 
     def do_volume(self, arg):
-        'Change the volum:  volume 20'
+        'Change the volume:  volume 20'
 
         if arg != '' and arg.isnumeric:
-            self.send('quit ' + arg)
+            self.send('volume ' + arg)
 
     def do_pause(self, arg=None):
         'pause the sound for an optional amount of time, in minute:  pause 60'
 
-        self.send('pause')
+        if arg.lower() == 'on' or arg.lower() == 'off':
+            self.send('pause ' + arg.lower())
+        else:
+            print('Unknown argument \'' + arg + '\' for pause. Precise either \'on\' or \'off\'')
+
 
     # Other Function
     def setConnectionManager(self, connectionManager):

@@ -6,13 +6,13 @@ class AHomePyShell(cmd.Cmd):
     prompt = '>>'
     file = None
 
-    # ----- basic turtle commands -----
+    # ----- shell commands -----
     def do_quit(self, arg):
         'Close the HomePyServer'
         raise NotImplementedError
 
     def do_volume(self, arg):
-        'Change the volum:  volume 20'
+        'Change the volume:  volume 20'
         raise NotImplementedError
 
     def do_pause(self, arg=None):
