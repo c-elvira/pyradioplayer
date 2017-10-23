@@ -19,6 +19,10 @@ class AHomePyShell(cmd.Cmd):
         'pause the sound for an optional amount of time, in minute:  pause 60'
         raise NotImplementedError
 
+    def do_play(self, arg=None):
+        'play music again aften it has been stopped, in minute:  play'
+        raise NotImplementedError
+
 
 if __name__ == '__main__':
     pass

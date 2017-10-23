@@ -72,12 +72,13 @@ class ServerHomePyShell(AHomePyShell):
         'pause the sound for an optional amount of time, in minute:  pause 60'
 
         if self.homepyServer is not None:
-            if arg.lower() == 'on':
-                self.homepyServer.pause(True)
-            elif arg.lower() == 'off':
-                self.homepyServer.pause(False)
-            else:
-                print('pause ' + arg + ' can\'t be interpreted')
+            self.homepyServer.play(False)
+
+    def do_play(self, arg=None):
+        'play music again aften it has been stopped, in minute:  play'
+
+        if self.homepyServer is not None:
+            self.homepyServer.play(True)
 
     def do_restart(self, arg):
 
@@ -223,7 +224,7 @@ class HomePyServer(object):
 
         self.player.audio_set_volume(int(newvolume))
 
-    def pause(self, bool_action):
+    def play(self, bool_action):
 
         if self.player.is_playing() and not bool_action:
             self.player.pause()

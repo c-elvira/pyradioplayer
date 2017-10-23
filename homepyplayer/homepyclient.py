@@ -87,10 +87,15 @@ class ClientHomePyShell(AHomePyShell):
     def do_pause(self, arg=None):
         'pause the sound for an optional amount of time, in minute:  pause 60'
 
-        if arg.lower() == 'on' or arg.lower() == 'off':
-            self.send('pause ' + arg.lower())
-        else:
-            print('Unknown argument \'' + arg + '\' for pause. Precise either \'on\' or \'off\'')
+        # if arg.lower() == 'on' or arg.lower() == 'off':
+        self.send('pause')
+        # else:
+        #     print('Unknown argument \'' + arg + '\' for pause. Precise either \'on\' or \'off\'')
+
+    def do_play(self, arg=None):
+        'play music again aften it has been stopped, in minute:  play'
+
+        self.send('play')
 
 
     # Other Function
