@@ -1,7 +1,7 @@
 from __future__ import unicode_literals
 
 # Python
-# import os
+import os
 import sys
 import time
 import socket
@@ -12,7 +12,7 @@ from subprocess import call
 
 # External library
 import vlc
-# import youtube_dl
+import youtube_dl
 
 # My library
 from homepyShell import AHomePyShell
@@ -85,6 +85,20 @@ class ServerHomePyShell(AHomePyShell):
         if self.homepyServer is not None:
             if arg == 'radio':
                 self.homepyServer.whenStarted()
+
+    def do_listen(self, arg):
+        """
+        Change Media. For instance
+        listen youtube url
+        """
+        args = arg.parse(' ')
+        if len(args) == 2:
+            if args.lower() == 'youtube':
+                self.homepyServer.listenOneYoutubeVideo(args[1])
+            else:
+                print('Not implemented or unknown')
+        else:
+            print('wrong number of arguments')
 
     # Misc
     def setServer(self, HomePyServer):
@@ -196,14 +210,55 @@ class HomePyMedia(object):
         self.quit = AtomicBool(False)
 
         self.media_radio = None
+        self.media_mp3 = None
 
         self.callbackRadioStop = callbackRadioStop
+        self.lastmp3file = None
+
+        # Delete old temporary mp3 file
+        for filename in os.listdir('.'):
+            if filename.endswith('.mp3'):
+                os.remove(filename)
+
+    def callbackEndYoutube(self):
+        self.listen_radio()
+
+        os.remove(self.lastmp3file)
+        self.lastmp3file = None
 
     def listen_radio(self, url_radio):
-        self.media_radio = self.vlc_instance.media_new(url_radio)
+        if self.media_radio is None:
+            self.media_radio = self.vlc_instance.media_new(url_radio)
         self.vlc_player.set_media(self.media_radio)
-        self.vlc_player.audio_set_volume(100)
         self.vlc_player.event_manager().event_attach(vlc.EventType.MediaPlayerEndReached, self.callbackRadioStop)
+        self.vlc_player.play()
+
+    def listen_oneYoutubeVideo(self, url_youtube):
+
+        ydl_opts = {
+            'format': 'bestaudio/best',
+            'postprocessors': [{
+            'key': 'FFmpegExtractAudio',
+            'preferredcodec': 'mp3',
+            'preferredquality': '192',
+            }]
+        }
+
+        with youtube_dl.YoutubeDL(ydl_opts) as ydl:
+            dwnld_report = ydl.download(['url_youtube'])
+        if dwnld_report:
+            print('Can\'t download youtube video')
+            return
+
+        # Search for the file
+        for filename in os.listdir('.'):
+            if filename.endswith('.mp3'):
+                self.lastmp3file = filename
+                break
+
+        self.media_mp3 = self.vlc_instance.media_new(self.lastmp3file)
+        self.vlc_player.set_media(self.media_radio)
+        self.vlc_player.event_manager().event_attach(vlc.EventType.MediaPlayerEndReached, self.callbackEndYoutube)
         self.vlc_player.play()
 
     def start(self):
@@ -316,6 +371,9 @@ class HomePyServer(object):
 
         elif self.moduleMedia is not None and bool_action:
             self.moduleMedia.play()
+
+    def listenOneYoutubeVideo(url_video):
+        self.moduleMedia.listen_oneYoutubeVideo(url_video)
 
     def whenStarted(self):
 

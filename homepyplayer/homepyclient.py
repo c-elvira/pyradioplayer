@@ -97,6 +97,20 @@ class ClientHomePyShell(AHomePyShell):
 
         self.send('play')
 
+    def do_listen(self, arg):
+        """
+        Change Media. For instance
+        listen youtube url
+        """
+        args = arg.parse(' ')
+        if len(args) == 2:
+            if args.lower() == 'youtube':
+                self.send('listen ' + arg)
+            else:
+                print('Not implemented or unknown')
+        else:
+            print('wrong number of arguments')
+
 
     # Other Function
     def setConnectionManager(self, connectionManager):

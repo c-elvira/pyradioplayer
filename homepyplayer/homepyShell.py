@@ -23,6 +23,13 @@ class AHomePyShell(cmd.Cmd):
         'play music again aften it has been stopped, in minute:  play'
         raise NotImplementedError
 
+    def do_listen(self, arg):
+        """
+        Change Media. For instance
+        listen youtube url
+        """
+        raise NotImplementedError
+
 
 if __name__ == '__main__':
     pass

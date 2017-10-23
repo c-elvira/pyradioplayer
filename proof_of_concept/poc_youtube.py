@@ -5,7 +5,7 @@ from time import sleep
 
 import vlc
 
-import os 
+import os
 
 
 finish = 0
@@ -28,10 +28,10 @@ ydl_opts = {
     }]
 }
 with youtube_dl.YoutubeDL(ydl_opts) as ydl:
-	dwnld_report = ydl.download(['https://www.youtube.com/watch?v=IVEaYIf68B0'])
+    dwnld_report = ydl.download(['https://www.youtube.com/watch?v=IVEaYIf68B0'])
 
 if dwnld_report:
-	error('Error during download')
+    error('Error during download')
 
 
 
@@ -40,9 +40,9 @@ if dwnld_report:
 
 
 for filename in os.listdir('.'):
-	if filename.endswith('.mp3'):
-		songfile = filename
-		break
+    if filename.endswith('.mp3'):
+        songfile = filename
+        break
 
 
 
@@ -66,7 +66,7 @@ events.event_attach(vlc.EventType.MediaPlayerEndReached, SongFinished)
 #Play for 10 seconds then exit
 bo = player.play()
 if bo == -1:
-	print('error while playing')
+    print('error while playing')
 
 while finish == 0:
-	time.sleep(0.2)
+    time.sleep(0.2)
