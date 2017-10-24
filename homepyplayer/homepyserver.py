@@ -17,12 +17,25 @@ import youtube_dl
 # My library
 from homepyShell import AHomePyShell
 
+# Remark : I use ffmeg on my raspberry pi
+# echo "alias youtube-dl='youtube-dl --prefer-ffmpeg'" | tee -a ~/.bashrc; . ~/.bashrc
+# According to
+# https://askubuntu.com/questions/645462/avconv-version-and-youtube-dl
+
 URL_FIP = "http://direct.fipradio.fr/live/fip-midfi.mp3"
 ADDRESS = ''
 PORT = 10000
 RESPONSE_SERVEUR = 'OK'
 END_TRAME = 'FINTRAME'
 HOMEPY_SOCKET_TIME_OUT = 2.0
+
+
+class ExceptionDoNotExist(Exception):
+    """docstring for QuitException"""
+
+    def __init__(self):
+        super(ExceptionDoNotExist, self).__init__()
+
 
 class AtomicBool:
     """An atomic, thread-safe quit flag.
@@ -91,9 +104,9 @@ class ServerHomePyShell(AHomePyShell):
         Change Media. For instance
         listen youtube url
         """
-        args = arg.parse(' ')
+        args = arg.split(' ')
         if len(args) == 2:
-            if args.lower() == 'youtube':
+            if args[0].lower() == 'youtube':
                 self.homepyServer.listenOneYoutubeVideo(args[1])
             else:
                 print('Not implemented or unknown')
@@ -213,53 +226,82 @@ class HomePyMedia(object):
         self.media_mp3 = None
 
         self.callbackRadioStop = callbackRadioStop
+
         self.lastmp3file = None
+        self.lastRadio = None
+        self._lock = threading.Lock()
 
         # Delete old temporary mp3 file
         for filename in os.listdir('.'):
             if filename.endswith('.mp3'):
                 os.remove(filename)
 
-    def callbackEndYoutube(self):
-        self.listen_radio()
+    def _set_media(self, media):
+        if not self.vlc_player.is_playing():
+            self.vlc_player = self.vlc_instance.media_player_new()
 
-        os.remove(self.lastmp3file)
-        self.lastmp3file = None
+        self.vlc_player.set_media(media)
 
-    def listen_radio(self, url_radio):
-        if self.media_radio is None:
+    def callbackEndYoutube(self, event):
+
+        # Sometimes, the callback is called twice...
+        if self.lastmp3file is not None:
+            self.listen_radio()
+
+            with self._lock:
+                os.remove(self.lastmp3file)
+                self.lastmp3file = None
+        else:
+            raise Exception('callbackEndYoutube has been called twice....')
+
+    def listen_radio(self, url_radio=None):
+
+        if url_radio is None:
+            self.media_radio = self.vlc_instance.media_new(self.lastRadio)
+
+        else:
             self.media_radio = self.vlc_instance.media_new(url_radio)
-        self.vlc_player.set_media(self.media_radio)
-        self.vlc_player.event_manager().event_attach(vlc.EventType.MediaPlayerEndReached, self.callbackRadioStop)
-        self.vlc_player.play()
+            self.lastRadio = url_radio
+
+        with self._lock:
+            self._set_media(self.media_radio)
+            self.vlc_player.event_manager().event_attach(vlc.EventType.MediaPlayerEndReached, self.callbackRadioStop)
+            self.vlc_player.play()
 
     def listen_oneYoutubeVideo(self, url_youtube):
 
-        ydl_opts = {
-            'format': 'bestaudio/best',
-            'postprocessors': [{
-            'key': 'FFmpegExtractAudio',
-            'preferredcodec': 'mp3',
-            'preferredquality': '192',
-            }]
-        }
+        try:
+            ydl_opts = {
+                'format': 'bestaudio/best',
+                'postprocessors': [{
+                'key': 'FFmpegExtractAudio',
+                'preferredcodec': 'mp3',
+                'preferredquality': '192',
+                }]
+            }
 
-        with youtube_dl.YoutubeDL(ydl_opts) as ydl:
-            dwnld_report = ydl.download(['url_youtube'])
-        if dwnld_report:
-            print('Can\'t download youtube video')
-            return
+            with youtube_dl.YoutubeDL(ydl_opts) as ydl:
+                dwnld_report = ydl.download([url_youtube])
+            if dwnld_report:
+                print('Can\'t download youtube video')
+                return
 
-        # Search for the file
-        for filename in os.listdir('.'):
-            if filename.endswith('.mp3'):
-                self.lastmp3file = filename
-                break
+            # Search for the file
+            for filename in os.listdir('.'):
+                if filename.endswith('.mp3'):
+                    with self._lock:
+                        self.lastmp3file = filename
+                    break
 
-        self.media_mp3 = self.vlc_instance.media_new(self.lastmp3file)
-        self.vlc_player.set_media(self.media_radio)
-        self.vlc_player.event_manager().event_attach(vlc.EventType.MediaPlayerEndReached, self.callbackEndYoutube)
-        self.vlc_player.play()
+            self.media_mp3 = self.vlc_instance.media_new(self.lastmp3file)
+            self._set_media(self.media_mp3)
+            self.vlc_player.event_manager().event_attach(vlc.EventType.MediaPlayerEndReached, self.callbackEndYoutube)
+            self.vlc_player.play()
+
+        except youtube_dl.DownloadError as e:
+            print(e)
+            raise ExceptionDoNotExist
+
 
     def start(self):
         self.vlc_instance = vlc.Instance()
@@ -352,6 +394,13 @@ class HomePyServer(object):
             except NotImplementedError:
                 print('The command is not implemented yet')
 
+            except ExceptionDoNotExist:
+                print('Youtube said that the video does exist. Return to radio')
+
+            except Exception as e:
+                print('An exception has been catched')
+                print(e)
+
         # The program is about to quit, wait for the thread
         print('Closing network...')
         self.moduleNetwork.closeNetwork()
@@ -372,7 +421,7 @@ class HomePyServer(object):
         elif self.moduleMedia is not None and bool_action:
             self.moduleMedia.play()
 
-    def listenOneYoutubeVideo(url_video):
+    def listenOneYoutubeVideo(self, url_video):
         self.moduleMedia.listen_oneYoutubeVideo(url_video)
 
     def whenStarted(self):

@@ -102,9 +102,9 @@ class ClientHomePyShell(AHomePyShell):
         Change Media. For instance
         listen youtube url
         """
-        args = arg.parse(' ')
+        args = arg.split(' ')
         if len(args) == 2:
-            if args.lower() == 'youtube':
+            if args[0].lower() == 'youtube':
                 self.send('listen ' + arg)
             else:
                 print('Not implemented or unknown')
