@@ -111,6 +111,9 @@ class ClientHomePyShell(AHomePyShell):
         else:
             print('wrong number of arguments')
 
+    def do_reconnect(self, arg):
+        self.connectionManager.start_connection()
+
 
     # Other Function
     def setConnectionManager(self, connectionManager):
