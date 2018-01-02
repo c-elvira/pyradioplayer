@@ -8,9 +8,9 @@ try:
     if sys.argv[1] == 'test':
         ADDRESS = 'localhost'
     else:
-        ADDRESS = '192.168.1.44'
+        ADDRESS = '192.168.1.45'
 except Exception as e:
-    ADDRESS = '192.168.1.44'
+    ADDRESS = '192.168.1.45'
 
 PORT = 10000
 RESPONSE_SERVEUR = 'OK'
