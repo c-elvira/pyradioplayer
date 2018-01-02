@@ -3,8 +3,6 @@ from __future__ import unicode_literals
 # Python
 import os
 import sys
-import time
-import socket
 import queue
 import threading
 
@@ -15,7 +13,10 @@ import vlc
 import youtube_dl
 
 # My library
+import utils
 from homepyShell import AHomePyShell
+from homepynetwork import HomePyNetwork
+
 
 # Remark : I use ffmeg on my raspberry pi
 # echo "alias youtube-dl='youtube-dl --prefer-ffmpeg'" | tee -a ~/.bashrc; . ~/.bashrc
@@ -25,10 +26,6 @@ from homepyShell import AHomePyShell
 URL_FIP = "http://direct.fipradio.fr/live/fip-midfi.mp3"
 ADDRESS = ''
 PORT = 10000
-RESPONSE_SERVEUR = 'OK'
-END_TRAME = 'FINTRAME'
-HOMEPY_SOCKET_TIME_OUT = 2.0
-MAX_CONNECTION = 20
 
 
 class ExceptionDoNotExist(Exception):
@@ -36,30 +33,6 @@ class ExceptionDoNotExist(Exception):
 
     def __init__(self):
         super(ExceptionDoNotExist, self).__init__()
-
-
-class AtomicBool:
-    """An atomic, thread-safe quit flag.
-
-    """
-
-    def __init__(self, initial=True):
-        """
-            Initialize a new atomic counter to given initial value (default 0).
-        """
-        self.value = initial
-        self._lock = threading.Lock()
-
-    def set(self, newvalue):
-        """
-            Atomically change the value of the boolean.
-        """
-        with self._lock:
-            self.value = bool(newvalue)
-
-    def get(self):
-        with self._lock:
-            return self.value
 
 
 class ServerHomePyShell(AHomePyShell):
@@ -121,151 +94,8 @@ class ServerHomePyShell(AHomePyShell):
         self.sock = None
 
 
-class ClientThread(threading.Thread):
-
-    def __init__(self, client_adress, clientsocket, callbackEvent):
-
-        threading.Thread.__init__(self)
-        self.ip = client_adress[0]
-        self.port = client_adress[1]
-        self.clientsocket = clientsocket
-        self.callbackProcessEvent = callbackEvent
-        self.atomicBoolQuitSocket = AtomicBool(False)
-        self.isRunning = AtomicBool(False)
-
-        print("[+] New thrad for %s %s" % (self.ip, self.port, ))
-
-    def run(self): 
-   
-        self.isRunning.set(True)
-        print(" Listening " + str(self.ip) + ':' + str(self.port))
-
-        try:
-            while not self.atomicBoolQuitSocket.get():
-                try:
-                    self.clientsocket.settimeout(HOMEPY_SOCKET_TIME_OUT)
-                    recevied_message = ''
-                    while True:
-                        data = self.clientsocket.recv(2048)
-                        if data:
-                            recevied_message += data.decode()
-                        else:
-                            break
-
-                        if recevied_message.endswith(END_TRAME):
-                            break
-                        elif len(recevied_message) > 1000:
-                            print('A cmd longer than 1000 character has been received')
-                        break
-
-                    self.clientsocket.sendall(RESPONSE_SERVEUR.encode())
-                    recevied_message = recevied_message.replace(END_TRAME, '')
-
-                    print('received: ' + recevied_message)
-                    self.callbackProcessEvent(recevied_message)
-
-                except socket.timeout as e:
-                    err = e.args[0]
-                    # this next if/else is a bit redundant, but illustrates
-                    # how the timeout exception is setup
-                    if err == 'timed out':
-                        time.sleep(1)
-                        continue
-                    else:
-                        print(e)
-
-                except socket.error as e:
-                    # Something else happened, print error
-                    # and handle it later
-                    print(e)
-                    break
-
-                except Exception as e:
-                    # Something else happened, print error
-                    # and handle it later
-                    print(e)
-                    break
-
-        finally:
-            # Clean up the connection
-            self.clientsocket.close()
-
-        self.isRunning.set(False)
-        print(str(self.ip) + ':' + str(self.port) + ' has deconnected')
-
-    def quit(self):
-        self.atomicBoolQuitSocket.set(True)
 
 
-class HomePyNetwork(object):
-
-    def __init__(self, callbackEvent):
-        super(HomePyNetwork, self).__init__()
-
-        self.sock = None
-        self.atomicBoolQuit = AtomicBool(False)
-        self.callbackProcessEvent = callbackEvent
-
-        self.listSocketClient = []
-
-    def bindAddress(self):
-
-        # Create a TCP/IP socket
-        self.sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-
-        # The socket might raise an exception if the address has been
-        # used recently.
-        # This option tells the socket to reuse the adress
-        self.sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
-
-        # Bind the socket to the port
-        server_address = (ADDRESS, PORT)
-        self.sock.bind(server_address)
-
-    def serverloop(self):
-        """
-            Server
-        """
-
-        # Listen for incoming connections
-        self.sock.settimeout(0.2)
-        self.sock.listen(1)
-
-        while not self.atomicBoolQuit.get():
-            # Wait for a connection
-
-            try:
-                connection, client_address = self.sock.accept()
-
-                newthread = ClientThread(client_address, connection, self.callbackProcessEvent)
-                newthread.start()
-
-            except socket.timeout:
-                pass
-            
-            except:
-                raise
-            else:
-                self.listSocketClient.append(newthread)
-
-            self.listSocketClient = [t for t in self.listSocketClient if t.is_alive()]
-            thread_to_kill = [t for t in self.listSocketClient if not t.is_alive()]
-
-            for t in thread_to_kill:
-                print('before join')
-                t.join()
-                print('thread t has joined in loop')
-
-        # Then kill all socket thread
-        print('End loop')
-        for t in self.listSocketClient:
-            t.quit()
-            print('thread t has quit')
-            t.join()
-            print('thread t has joined')
-
-    def closeNetwork(self):
-        self.atomicBoolQuit.set(True)
 
 
 class HomePyMedia(object):
@@ -276,7 +106,7 @@ class HomePyMedia(object):
 
         self.vlc_instance = None
         self.vlc_player = None
-        self.quit = AtomicBool(False)
+        self.quit = utils.AtomicBool(False)
 
         self.media_radio = None
         self.media_mp3 = None
@@ -390,7 +220,7 @@ class HomePyServer(object):
         self.queueEvent = queue.Queue()
         self.thread_server = None
 
-        self.atomicBoolQuit = AtomicBool(False)
+        self.atomicBoolQuit = utils.AtomicBool(False)
 
     def __exit__(self):
         print('Byyyy :)')
@@ -484,7 +314,7 @@ class HomePyServer(object):
 
         print('By default, the french radio FIP is streamed')
         self.moduleMedia.listen_radio(URL_FIP)
-        self.moduleMedia.set_volume(100)
+        self.moduleMedia.set_volume(60)
 
 
 if __name__ == '__main__':
